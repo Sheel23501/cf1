@@ -1,0 +1,23 @@
+User ID: 694, Item ID: 204
+Actual Rating: 4, Predicted Rating: 3.0
+User ID: 193, Item ID: 682
+Actual Rating: 1, Predicted Rating: 3.0
+User ID: 223, Item ID: 323
+Actual Rating: 2, Predicted Rating: 3.0
+User ID: 58, Item ID: 603
+Actual Rating: 5, Predicted Rating: 3.0
+User ID: 498, Item ID: 425
+Actual Rating: 2, Predicted Rating: 3.0
+User ID: 899, Item ID: 204
+Actual Rating: 4, Predicted Rating: 3.0
+User ID: 373, Item ID: 206
+Actual Rating: 4, Predicted Rating: 3.0
+User ID: 774, Item ID: 826
+Actual Rating: 2, Predicted Rating: 3.0
+User ID: 607, Item ID: 121
+Actual Rating: 2, Predicted Rating: 2.0
+User ID: 130, Item ID: 444
+Actual Rating: 4, Predicted Rating: 3.0
+
+Evaluation:
+RMSE: 1.2247

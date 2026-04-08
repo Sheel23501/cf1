@@ -1,0 +1,41 @@
+PHASE 4 RESULTS
+=================================================================
+
+Binarization threshold : rating >= 4
+Test users evaluated   : 100
+K values               : [5, 10, 20]
+
+HIT RATE TABLE
+-----------------------------------------------------------------
+1. Popularity Baseline
+  HitRate@5: 0.6700
+  HitRate@10: 0.7800
+  HitRate@20: 0.8500
+
+2. Item-based CF
+  HitRate@5: 0.4100
+  HitRate@10: 0.5800
+  HitRate@20: 0.6700
+
+3. LLM-Enhanced CF (Ours)
+  HitRate@5: 0.5200
+  HitRate@10: 0.6300
+  HitRate@20: 0.7300
+
+NDCG TABLE
+-----------------------------------------------------------------
+1. Popularity Baseline
+  NDCG@5: 0.2940
+  NDCG@10: 0.2596
+  NDCG@20: 0.2556
+
+2. Item-based CF
+  NDCG@5: 0.1340
+  NDCG@10: 0.1315
+  NDCG@20: 0.1299
+
+3. LLM-Enhanced CF (Ours)
+  NDCG@5: 0.1873
+  NDCG@10: 0.1714
+  NDCG@20: 0.1491
+
