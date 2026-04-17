@@ -1,0 +1,23 @@
+# Data files (too large for git)
+data/movielens-1m/ml-100k*/
+data/amazon-book/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Model checkpoints
+*.pt
+*.pth
