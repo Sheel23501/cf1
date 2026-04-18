@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class LightGCN(nn.Module):
     def __init__(self, n_users, n_items, norm_adj, config):
         """
@@ -32,6 +33,7 @@ class LightGCN(nn.Module):
         E^{(k+1)} = D^{-1/2} A D^{-1/2} E^{(k)}
         Final Embeddings = E^{(0)} + E^{(1)} + ... + E^{(K)}
         """
+        # Learnable base embeddings (layer 0).
         users_emb = self.embedding_user.weight
         items_emb = self.embedding_item.weight
         
@@ -39,12 +41,14 @@ class LightGCN(nn.Module):
         all_emb = torch.cat([users_emb, items_emb])
         embs = [all_emb]
         
-        # Propagate through layers
+        # Each propagation step aggregates 1-hop neighbors.
+        # Repeating this captures higher-order collaborative signals.
         for layer in range(self.n_layers):
             all_emb = torch.sparse.mm(self.norm_adj, all_emb)
             embs.append(all_emb)
             
-        # Stack and average (LightGCN paper averages the embeddings of all layers)
+        # LightGCN uses simple averaging over all layer outputs.
+        # No non-linearity and no feature transformation are applied.
         embs = torch.stack(embs, dim=1)
         light_out = torch.mean(embs, dim=1)
         
@@ -55,13 +59,15 @@ class LightGCN(nn.Module):
         """
         Forward pass for BPR Training calculating the ratings for positive and negative samples.
         """
+        # Compute final user/item embeddings after graph propagation.
         all_users, all_items = self.computer()
         
         u_emb = all_users[users]
         pos_emb = all_items[pos_items]
         neg_emb = all_items[neg_items]
         
-        # Prediction via inner product
+        # BPR compares positive and negative item affinity for each user.
+        # Affinity is modeled by dot product in embedding space.
         pos_scores = torch.mul(u_emb, pos_emb).sum(dim=1)
         neg_scores = torch.mul(u_emb, neg_emb).sum(dim=1)
         
@@ -76,6 +82,8 @@ class LightGCN(nn.Module):
         """
         Get all item scores for a batch of users (used for evaluation).
         """
+        # This returns dense scores of shape (batch_users, n_items).
+        # Ranking metrics (HR/NDCG) are computed from these scores.
         all_users, all_items = self.computer()
         users_emb = all_users[users.long()]
         items_emb = all_items

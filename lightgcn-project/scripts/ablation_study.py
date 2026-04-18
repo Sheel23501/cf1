@@ -20,12 +20,35 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from collections import defaultdict
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    # Allow script-style execution with package imports from src/.
+    sys.path.append(str(SRC_ROOT))
 
-from src.utils.data_loader import BipartiteGraphLoader, BPRDataset
-from src.utils.metrics import hit_rate_at_k, ndcg_at_k
-from src.models.lightgcn import LightGCN
+from lightgcn_project.data.data_loader import BipartiteGraphLoader, BPRDataset
+from lightgcn_project.evaluation.metrics import hit_rate_at_k, ndcg_at_k
+from lightgcn_project.models.lightgcn import LightGCN
+
+
+def resolve_data_path():
+    """Resolve dataset path from env var or standard project locations."""
+    env_path = os.getenv("LIGHTGCN_DATA_PATH")
+    candidates = [
+        Path(env_path) if env_path else None,
+        PROJECT_ROOT / "data" / "raw" / "u.data",
+    ]
+
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            # First available path is used.
+            return candidate
+
+    raise FileNotFoundError(
+        "Dataset file not found. Set LIGHTGCN_DATA_PATH or place u.data in data/raw/u.data"
+    )
 
 
 # ============================================================
@@ -55,9 +78,11 @@ class LightGCN_Ablation(nn.Module):
             self.layer_weights = nn.Parameter(torch.ones(self.n_layers + 1) / (self.n_layers + 1))
 
     def computer(self):
+        # Layer-0 embeddings are direct user/item lookup parameters.
         all_emb = torch.cat([self.embedding_user.weight, self.embedding_item.weight])
         embs = [all_emb]
 
+        # Propagate through K graph layers.
         for _ in range(self.n_layers):
             all_emb = torch.sparse.mm(self.norm_adj, all_emb)
             embs.append(all_emb)
@@ -130,6 +155,7 @@ def build_test_dict(test_data):
 
 
 def evaluate_model(model, loader, device, k_values=[5, 10, 20]):
+    # Evaluate ranking metrics on held-out test interactions.
     model.eval()
     test_dict = build_test_dict(loader.test_data)
 
@@ -165,6 +191,7 @@ def train_and_evaluate(config, loader, bpr_loader, device, epochs=100):
     loss_fn = BPRLoss(decay=config.get('decay', 1e-4))
     optimizer = optim.Adam(model.parameters(), lr=config.get('lr', 0.001))
 
+    # Fixed-epoch training for fair ablation comparison.
     for epoch in range(1, epochs + 1):
         model.train()
         for batch_u, batch_pos, batch_neg in bpr_loader:
@@ -193,14 +220,16 @@ def main():
                           else "cpu")
     print(f"Device: {device}\n")
 
-    filepath = "data/movielens-1m/ml-100k 4/u.data"
-    loader = BipartiteGraphLoader(filepath, threshold=1.0)
-    loader.load_raw_csv(filepath)
+    filepath = resolve_data_path()
+    loader = BipartiteGraphLoader(str(filepath), threshold=1.0)
+    loader.load_raw_csv(str(filepath))
 
     bpr_dataset = BPRDataset(loader)
     bpr_loader = DataLoader(bpr_dataset, batch_size=2048, shuffle=True, drop_last=True)
 
-    os.makedirs("results/tables", exist_ok=True)
+    # Centralize all generated experiment tables in one output location.
+    output_dir = PROJECT_ROOT / "outputs" / "tables"
+    output_dir.mkdir(parents=True, exist_ok=True)
     all_ablation_results = []
 
     # =========================================================
@@ -311,7 +340,7 @@ def main():
     print("=" * 90)
 
     # ---- Save to CSV ----
-    csv_path = "results/tables/ablation_ml100k.csv"
+    csv_path = output_dir / "ablation_ml100k.csv"
     fieldnames = ['experiment', 'HR@5', 'HR@10', 'HR@20', 'NDCG@5', 'NDCG@10', 'NDCG@20', 'time']
     with open(csv_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

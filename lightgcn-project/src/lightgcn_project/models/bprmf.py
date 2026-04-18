@@ -30,7 +30,7 @@ class BPRMF(nn.Module):
         self.user_embedding = nn.Embedding(n_users, latent_dim)
         self.item_embedding = nn.Embedding(n_items, latent_dim)
         
-        # Xavier initialization
+        # Keep initialization consistent with LightGCN to make comparison fair.
         nn.init.normal_(self.user_embedding.weight, std=0.1)
         nn.init.normal_(self.item_embedding.weight, std=0.1)
     
@@ -46,10 +46,13 @@ class BPRMF(nn.Module):
         Returns:
             pos_scores, neg_scores, user/item embeddings for regularization
         """
+        # Look up trainable latent vectors for each triple component.
         u_emb = self.user_embedding(users)
         pos_emb = self.item_embedding(pos_items)
         neg_emb = self.item_embedding(neg_items)
         
+        # Dot products produce preference scores.
+        # BPR loss will enforce pos_scores > neg_scores.
         pos_scores = torch.mul(u_emb, pos_emb).sum(dim=1)
         neg_scores = torch.mul(u_emb, neg_emb).sum(dim=1)
         
@@ -65,6 +68,7 @@ class BPRMF(nn.Module):
         Returns:
             (batch_size, n_items) score matrix
         """
+        # Compute all item scores for a user batch in one matrix multiply.
         u_emb = self.user_embedding(users)
         all_items = self.item_embedding.weight
         ratings = torch.matmul(u_emb, all_items.t())

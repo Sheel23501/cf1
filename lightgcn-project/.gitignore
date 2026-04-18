@@ -1,6 +1,13 @@
 # Data files (too large for git)
 data/movielens-1m/ml-100k*/
 data/amazon-book/
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Generated outputs
+outputs/tables/*.csv
 
 # Python
 __pycache__/

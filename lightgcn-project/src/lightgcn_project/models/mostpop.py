@@ -19,9 +19,11 @@ class MostPopular:
             train_data: np.array of shape (N, 2) — [user_id, item_id]
             n_items: Total number of items
         """
+        # Popularity is estimated only from train interactions to avoid leakage.
         self.n_items = n_items
         self.item_popularity = np.zeros(n_items, dtype=np.float32)
         
+        # Count interaction frequency per item.
         for _, item_id in train_data:
             self.item_popularity[int(item_id)] += 1.0
 
@@ -36,6 +38,6 @@ class MostPopular:
         Returns:
             (len(user_ids), n_items) score matrix
         """
-        # Every user gets the exact same popularity scores
+        # This baseline is non-personalized: each user receives same ranking signal.
         scores = np.tile(self.item_popularity, (len(user_ids), 1))
         return scores
