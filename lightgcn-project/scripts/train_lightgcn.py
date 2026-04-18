@@ -6,13 +6,37 @@ import numpy as np
 import time
 import sys
 import os
+import copy
+from pathlib import Path
 
 # Ensure we can import from src
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    # Allow direct script execution while importing the package under src/.
+    sys.path.append(str(SRC_ROOT))
 
-from src.utils.data_loader import BipartiteGraphLoader, BPRDataset
-from src.models.lightgcn import LightGCN
-from src.utils.metrics import hit_rate_at_k, ndcg_at_k
+from lightgcn_project.data.data_loader import BipartiteGraphLoader, BPRDataset
+from lightgcn_project.models.lightgcn import LightGCN
+from lightgcn_project.evaluation.metrics import hit_rate_at_k, ndcg_at_k
+
+
+def resolve_data_path():
+    """Resolve dataset path from env var or standard project locations."""
+    env_path = os.getenv("LIGHTGCN_DATA_PATH")
+    candidates = [
+        Path(env_path) if env_path else None,
+        PROJECT_ROOT / "data" / "raw" / "u.data",
+    ]
+
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            # First valid path wins.
+            return candidate
+
+    raise FileNotFoundError(
+        "Dataset file not found. Set LIGHTGCN_DATA_PATH or place u.data in data/raw/u.data"
+    )
 
 class BPRLoss(nn.Module):
     def __init__(self, decay=1e-4):
@@ -38,12 +62,12 @@ class BPRLoss(nn.Module):
         return loss + self.decay * reg_loss
 
 
-def evaluate(model, data_loader, device, k=20):
+def evaluate(model, data_loader, device, k=20, eval_data=None):
     """
     Evaluates the model on the Test set calculating HR@K and NDCG@K.
     """
     model.eval()
-    test_data = data_loader.test_data
+    test_data = data_loader.test_data if eval_data is None else eval_data
     
     # Create dict of true items per user for fast lookup
     test_dict = {}
@@ -84,34 +108,37 @@ def evaluate(model, data_loader, device, k=20):
 
 def train():
     # --- Configuration ---
+    # Centralized experiment knobs for reproducibility and easy tuning.
     config = {
-        'latent_dim': 64,    # Size of the embeddings
-        'n_layers': 3,       # LightGCN layers (K=3 is optimal in the paper)
-        'lr': 0.001,         # Learning rate
+        'latent_dim': 128,   # Larger embedding space improves ranking quality on ML-100K
+        'n_layers': 1,       # Shallow propagation often works better on this dataset
+        'lr': 0.005,         # Higher learning rate from ablation trends
         'decay': 1e-4,       # L2 Regularization weight
         'batch_size': 2048,  # BPR batch size
-        'epochs': 100        # Number of training epochs
+        'epochs': 8,         # Best value from exhaustive grid search
+        'early_stop_patience': 3  # Early stop based on validation NDCG@20
     }
     
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # --- 1. Load Data ---
-    # Update this path to wherever your movielens 1m ratings.dat or ratings.csv is stored.
-    # We'll adapt it directly to your "ml-100k 4" folder
-    filepath = "data/movielens-1m/ml-100k 4/u.data"
+    # Data resolver supports environment override and project default.
+    filepath = resolve_data_path()
     
     if not os.path.exists(filepath):
         print(f"Warning: Data file {filepath} not found. Please ensure your MovieLens data is there.")
         return
 
-    loader = BipartiteGraphLoader(filepath, threshold=1.0)
-    loader.load_raw_csv(filepath)
+    loader = BipartiteGraphLoader(str(filepath), threshold=1.0)
+    loader.load_raw_csv(str(filepath), val_ratio=0.1)
+    use_validation = len(loader.val_data) > 0
 
-    bpr_dataset = BPRDataset(loader)
+    bpr_dataset = BPRDataset(loader, sampling_strategy="mixed", popular_prob=0.7)
     bpr_loader = DataLoader(bpr_dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True)
 
     # --- 2. Initialize Model & Optimizer ---
+    # Build model and optimization objective for pairwise ranking.
     model = LightGCN(loader.n_users, loader.n_items, loader.norm_adj.to(device), config).to(device)
     bpr_loss_fn = BPRLoss(decay=config['decay'])
     optimizer = optim.Adam(model.parameters(), lr=config['lr'])
@@ -119,7 +146,12 @@ def train():
     print(f"\n--- Starting LightGCN Training ---")
     
     # --- 3. Training Loop ---
+    # Track best checkpoint on validation NDCG@20.
     best_ndcg = 0.0
+    best_hr = 0.0
+    best_epoch = 0
+    stale_evals = 0
+    best_state = copy.deepcopy(model.state_dict())
     
     for epoch in range(1, config['epochs'] + 1):
         model.train()
@@ -146,17 +178,33 @@ def train():
             
         avg_loss = total_loss / len(bpr_loader)
         
-        # Evaluate every 5 epochs
+        # Evaluate periodically to monitor overfitting and trigger early stop.
         if epoch % 5 == 0 or epoch == 1:
-            hr, ndcg = evaluate(model, loader, device, k=20)
-            print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | HR@20: {hr:.4f} | NDCG@20: {ndcg:.4f} | Time: {time.time()-start_time:.1f}s")
+            eval_data = loader.val_data if use_validation else loader.test_data
+            hr, ndcg = evaluate(model, loader, device, k=20, eval_data=eval_data)
+            split_name = "Val" if use_validation else "Test"
+            print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | {split_name} HR@20: {hr:.4f} | {split_name} NDCG@20: {ndcg:.4f} | Time: {time.time()-start_time:.1f}s")
             
             if ndcg > best_ndcg:
                 best_ndcg = ndcg
-                # Optional: Save model checkpoint
-                # torch.save(model.state_dict(), "best_lightgcn.pth")
+                best_hr = hr
+                best_epoch = epoch
+                stale_evals = 0
+                best_state = copy.deepcopy(model.state_dict())
+            else:
+                stale_evals += 1
+
+            if stale_evals >= config['early_stop_patience']:
+                print(f"Early stopping triggered at epoch {epoch:03d}.")
+                break
         else:
             print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | Time: {time.time()-start_time:.1f}s")
+
+    # Restore best checkpoint before final test report.
+    model.load_state_dict(best_state)
+    test_hr, test_ndcg = evaluate(model, loader, device, k=20, eval_data=loader.test_data)
+    print(f"Best checkpoint -> Epoch {best_epoch:03d} | Val HR@20: {best_hr:.4f} | Val NDCG@20: {best_ndcg:.4f}")
+    print(f"Final Test -> HR@20: {test_hr:.4f} | NDCG@20: {test_ndcg:.4f}")
 
 if __name__ == "__main__":
     train()

@@ -28,7 +28,7 @@ class ItemKNN:
             n_users: Total users
             n_items: Total items
         """
-        # Build sparse user-item interaction matrix
+        # Build binary interaction matrix R where R[u, i] = 1 if interacted.
         users = train_data[:, 0].astype(int)
         items = train_data[:, 1].astype(int)
         values = np.ones(len(users), dtype=np.float32)
@@ -37,20 +37,20 @@ class ItemKNN:
             (values, (users, items)), shape=(n_users, n_items)
         )
         
-        # Compute item-item cosine similarity  
-        # item_matrix is (n_items, n_users) — each row is an item's user-interaction vector
+        # Compute item-item cosine similarity using user overlap patterns.
+        # item_matrix shape: (n_items, n_users)
         item_matrix = self.user_item_matrix.T  
         self.item_similarity = cosine_similarity(item_matrix, dense_output=False)
         
         # Zero out self-similarity (diagonal)
         self.item_similarity.setdiag(0)
         
-        # Keep only top-K neighbors per item for speed
-        # Convert to dense for top-k selection, then back to sparse
+        # Keep top-K neighbors per item to reduce noise and memory/computation costs.
+        # Convert to dense for easy thresholding, then convert back to sparse.
         sim_dense = self.item_similarity.toarray()
         for i in range(n_items):
             row = sim_dense[i]
-            # Zero out everything except top-k
+            # Zero out everything except strongest K neighbors for item i.
             if np.count_nonzero(row) > self.k:
                 threshold = np.partition(row, -self.k)[-self.k]
                 row[row < threshold] = 0
@@ -69,11 +69,12 @@ class ItemKNN:
         Returns:
             (len(user_ids), n_items) score matrix
         """
+        # scores[u, i] = sum of similarities between i and user's interacted items.
         scores = np.zeros((len(user_ids), n_items), dtype=np.float32)
         
         for idx, uid in enumerate(user_ids):
-            user_vec = self.user_item_matrix[uid]  # (1, n_items) sparse
-            # score for each item = sum of similarities to items user has interacted with
+            user_vec = self.user_item_matrix[uid]  # (1, n_items) sparse row
+            # Multiply user interactions by item-item similarity to produce recommendation scores.
             user_scores = user_vec.dot(self.item_similarity).toarray().flatten()
             scores[idx] = user_scores
         

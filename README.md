@@ -1,77 +1,82 @@
 # CF1 Recommender Systems Project
 
-This repository contains a LightGCN-based collaborative filtering project with baseline comparisons and ablation experiments.
+Single source of documentation for this repository.
 
-Main project directory: [lightgcn-project](lightgcn-project)
+This project implements LightGCN for implicit-feedback recommendation and compares it with classic collaborative filtering baselines.
 
-## What This Repo Includes
+## Features
 
-- LightGCN implementation for implicit-feedback recommendation
+- LightGCN model for bipartite user-item graph recommendation
 - Baselines: MostPop, ItemKNN, and BPR-MF
-- Evaluation with HR@K and NDCG@K
+- Metrics: HR@K and NDCG@K
 - Experiment scripts for:
-	- training LightGCN
-	- running all baselines
-	- running ablation studies
+	- single-model training
+	- baseline comparison
+	- ablation studies
 
-## Repository Layout
+## Repository Structure
 
-```
-.
+```text
+cf1/
 ├── README.md
 ├── requirements.txt
 └── lightgcn-project/
-		├── README.md
 		├── requirements.txt
+		├── pyproject.toml
 		├── scripts/
-		├── src/
-		└── results/
+		│   ├── train_lightgcn.py
+		│   ├── run_all_baselines.py
+		│   └── ablation_study.py
+		├── src/lightgcn_project/
+		│   ├── data/
+		│   ├── evaluation/
+		│   └── models/
+		├── data/
+		│   ├── raw/
+		│   └── processed/
+		├── outputs/tables/
+		├── docs/
+		└── notebooks/
 ```
 
-## Quick Start
+## Data Path
 
-1. Move into the project directory:
+Scripts resolve dataset path in this order:
+
+1. `LIGHTGCN_DATA_PATH` environment variable
+2. `lightgcn-project/data/raw/u.data`
+
+Recommended default location:
+
+- [lightgcn-project/data/raw/u.data](lightgcn-project/data/raw/u.data)
+
+Optional override:
 
 ```bash
-cd lightgcn-project
+export LIGHTGCN_DATA_PATH=/absolute/path/to/u.data
 ```
 
-2. Create and activate a virtual environment:
+## Setup
 
 ```bash
+cd /home/vikas/Documents/cf1/lightgcn-project
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-3. Install dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-4. Place your dataset where scripts expect it (default):
+## Run Commands
 
-```text
-data/movielens-1m/ml-100k 4/u.data
-```
-
-If your data path differs, update the filepath in:
-- [lightgcn-project/scripts/train_lightgcn.py](lightgcn-project/scripts/train_lightgcn.py)
-- [lightgcn-project/scripts/run_all_baselines.py](lightgcn-project/scripts/run_all_baselines.py)
-- [lightgcn-project/scripts/ablation_study.py](lightgcn-project/scripts/ablation_study.py)
-
-## Run Experiments
-
-Train only LightGCN:
-
-```bash
-python scripts/train_lightgcn.py
-```
-
-Run baseline comparison table:
+Run all baselines and generate comparison table:
 
 ```bash
 python scripts/run_all_baselines.py
+```
+
+Train LightGCN only:
+
+```bash
+python scripts/train_lightgcn.py
 ```
 
 Run ablation study:
@@ -82,11 +87,13 @@ python scripts/ablation_study.py
 
 ## Outputs
 
-Generated result tables are saved in:
-- [lightgcn-project/results/tables/comparison_ml100k.csv](lightgcn-project/results/tables/comparison_ml100k.csv)
-- [lightgcn-project/results/tables/ablation_ml100k.csv](lightgcn-project/results/tables/ablation_ml100k.csv)
+Generated tables are saved to:
+
+- [lightgcn-project/outputs/tables/comparison_ml100k.csv](lightgcn-project/outputs/tables/comparison_ml100k.csv)
+- [lightgcn-project/outputs/tables/ablation_ml100k.csv](lightgcn-project/outputs/tables/ablation_ml100k.csv)
 
 ## Notes
 
-- Root [requirements.txt](requirements.txt) is separate from the LightGCN experiment dependencies.
-- For project-specific setup, use [lightgcn-project/requirements.txt](lightgcn-project/requirements.txt).
+- Device fallback order: CUDA -> MPS -> CPU
+- Objective: BPR loss with L2 regularization
+- Root [requirements.txt](requirements.txt) is separate from [lightgcn-project/requirements.txt](lightgcn-project/requirements.txt)
