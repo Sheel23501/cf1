@@ -137,9 +137,8 @@ def get_neural_model_scores(model, n_users, device, batch_size=1024):
 # ============================================================
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          else "mps" if torch.backends.mps.is_available()
-                          else "cpu")
+    # Force CPU to avoid MPS 'log_sigmoid' unimplemented error
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}\n")
 
     # ---- Load Data ----

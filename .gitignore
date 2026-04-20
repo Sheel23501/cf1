@@ -1,1 +1,8 @@
 .env
+# Added by code-review-graph
+.code-review-graph/
+lightgcn-project/data/
+**/__pycache__/
+*.pth
+*.csv
+!lightgcn-project/results/tables/*.csv
