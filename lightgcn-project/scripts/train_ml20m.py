@@ -71,8 +71,11 @@ def train():
         'epochs': 50
     }
     
-    # CPU is more stable for large sparse graph operations on Mac
-    device = torch.device("cpu")
+    # Auto-detect device: CUDA for AI Server, CPU for Mac stability with sparse ops
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
     # --- 1. Load Data ---
